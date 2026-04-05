@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>摆线齿轮辅助设计工具</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #0f172a; color: #e2e8f0; display: flex; height: 100vh; overflow: hidden; }
+
+  .panel-left {
+    width: 320px; min-width: 320px; background: #1e293b; border-right: 1px solid #334155;
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .panel-header {
+    padding: 20px; background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    font-size: 18px; font-weight: 700; letter-spacing: 1px;
+  }
+  .param-section { padding: 16px 20px; border-bottom: 1px solid #334155; }
+  .param-section h3 { font-size: 13px; color: #94a3b8; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .param-row { display: flex; align-items: center; margin-bottom: 10px; gap: 10px; }
+  .param-row label { width: 80px; font-size: 14px; color: #cbd5e1; flex-shrink: 0; }
+  .param-row label sub { font-size: 11px; }
+  .param-row input[type="number"] {
+    flex: 1; background: #0f172a; border: 1px solid #475569; border-radius: 6px;
+    padding: 8px 12px; color: #e2e8f0; font-size: 14px; outline: none; transition: border-color 0.2s;
+  }
+  .param-row input[type="number"]:focus { border-color: #3b82f6; }
+  .param-row .unit { font-size: 12px; color: #64748b; width: 30px; }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding: 4px 0; }
+  .toggle-row span { font-size: 13px; color: #cbd5e1; }
+  .toggle-switch { position: relative; width: 40px; height: 22px; cursor: pointer; }
+  .toggle-switch input { display: none; }
+  .toggle-slider {
+    position: absolute; inset: 0; background: #475569; border-radius: 11px; transition: background 0.3s;
+  }
+  .toggle-slider::before {
+    content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px;
+    background: white; border-radius: 50%; transition: transform 0.3s;
+  }
+  .toggle-switch input:checked + .toggle-slider { background: #3b82f6; }
+  .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
+
+  .preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .preset-btn {
+    background: #334155; border: 1px solid #475569; border-radius: 6px;
+    padding: 8px; color: #e2e8f0; font-size: 12px; cursor: pointer; transition: all 0.2s; text-align: center;
+  }
+  .preset-btn:hover { background: #3b82f6; border-color: #3b82f6; }
+
+  /* 动画控制 */
+  .anim-controls { display: flex; flex-direction: column; gap: 10px; }
+  .anim-btn-row { display: flex; gap: 8px; }
+  .anim-btn {
+    flex: 1; padding: 10px; border: none; border-radius: 8px; font-size: 14px;
+    cursor: pointer; font-weight: 600; transition: all 0.2s; color: white;
+  }
+  .anim-btn.play { background: linear-gradient(135deg, #22c55e, #16a34a); }
+  .anim-btn.play:hover { opacity: 0.85; }
+  .anim-btn.play.active { background: linear-gradient(135deg, #ef4444, #dc2626); }
+  .anim-btn.reset { background: #475569; }
+  .anim-btn.reset:hover { background: #64748b; }
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  .slider-row label { font-size: 12px; color: #94a3b8; width: 50px; flex-shrink: 0; }
+  .slider-row input[type="range"] {
+    flex: 1; -webkit-appearance: none; height: 6px; background: #334155; border-radius: 3px; outline: none;
+  }
+  .slider-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 16px; height: 16px; background: #3b82f6; border-radius: 50%; cursor: pointer;
+  }
+  .slider-row .val { font-size: 12px; color: #38bdf8; font-family: monospace; width: 55px; text-align: right; }
+
+  .canvas-area {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    position: relative; background: #0f172a;
+  }
+  canvas { border-radius: 8px; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  .canvas-info {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(30,41,59,0.9); padding: 6px 16px; border-radius: 20px;
+    font-size: 12px; color: #94a3b8; backdrop-filter: blur(8px);
+  }
+  .canvas-angle {
+    position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(30,41,59,0.9); padding: 6px 16px; border-radius: 20px;
+    font-size: 13px; color: #38bdf8; font-family: monospace; backdrop-filter: blur(8px);
+  }
+
+  .panel-right {
+    width: 360px; min-width: 360px; background: #1e293b; border-left: 1px solid #334155;
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .eq-section { padding: 16px 20px; border-bottom: 1px solid #334155; }
+  .eq-section h3 { font-size: 13px; color: #94a3b8; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .eq-block {
+    background: #0f172a; border-radius: 8px; padding: 14px; margin-bottom: 10px;
+    font-family: 'Consolas', 'Courier New', monospace; font-size: 13px;
+    line-height: 1.8; overflow-x: auto; border: 1px solid #334155;
+  }
+  .eq-block .eq-label { color: #8b5cf6; font-weight: 600; }
+  .eq-block .eq-var { color: #38bdf8; }
+  .eq-block .eq-op { color: #f472b6; }
+  .eq-block .eq-num { color: #fbbf24; }
+
+  .export-btns { display: flex; flex-direction: column; gap: 8px; }
+  .export-btn {
+    background: linear-gradient(135deg, #3b82f6, #6366f1); border: none; border-radius: 8px;
+    padding: 10px 16px; color: white; font-size: 14px; cursor: pointer; transition: opacity 0.2s; font-weight: 500;
+  }
+  .export-btn:hover { opacity: 0.85; }
+  .export-btn.secondary { background: linear-gradient(135deg, #475569, #334155); }
+
+  .info-card {
+    background: #0f172a; border-radius: 8px; padding: 12px; margin-bottom: 8px; border: 1px solid #334155;
+  }
+  .info-card .info-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; }
+  .info-card .info-label { color: #94a3b8; }
+  .info-card .info-value { color: #38bdf8; font-family: monospace; }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+  .toast {
+    position: fixed; top: 20px; right: 20px; background: #22c55e; color: white;
+    padding: 10px 20px; border-radius: 8px; font-size: 14px; z-index: 1000;
+    transform: translateY(-100px); opacity: 0; transition: all 0.3s;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- 左侧参数面板 -->
+<div class="panel-left">
+  <div class="panel-header">⚙ 摆线齿轮设计</div>
+
+  <div class="param-section">
+    <h3>基本参数</h3>
+    <div class="param-row">
+      <label>针轮半径 <sub>R</sub></label>
+      <input type="number" id="paramR" value="100" min="10" step="1">
+      <span class="unit">mm</span>
+    </div>
+    <div class="param-row">
+      <label>针齿套半径 <sub>r</sub></label>
+      <input type="number" id="paramr" value="6" min="1" step="0.5">
+      <span class="unit">mm</span>
+    </div>
+    <div class="param-row">
+      <label>偏心距 <sub>A</sub></label>
+      <input type="number" id="paramA" value="5" min="0.5" step="0.5">
+      <span class="unit">mm</span>
+    </div>
+    <div class="param-row">
+      <label>针齿数 <sub>Z₁</sub></label>
+      <input type="number" id="paramZ1" value="12" min="6" max="120" step="1">
+      <span class="unit">个</span>
+    </div>
+    <div class="param-row">
+      <label>摆线齿数 <sub>Z₂</sub></label>
+      <input type="number" id="paramZ2" value="11" min="5" max="119" step="1">
+      <span class="unit">个</span>
+    </div>
+  </div>
+
+  <div class="param-section">
+    <h3>动画控制</h3>
+    <div class="anim-controls">
+      <div class="anim-btn-row">
+        <button class="anim-btn play" id="btnPlay" onclick="togglePlay()">▶ 播放</button>
+        <button class="anim-btn reset" onclick="resetAnim()">⟲ 复位</button>
+      </div>
+      <div class="slider-row">
+        <label>角度 φ</label>
+        <input type="range" id="sliderAngle" min="0" max="360" step="0.5" value="0" oninput="onAngleSlider(this.value)">
+        <span class="val" id="valAngle">0.0°</span>
+      </div>
+      <div class="slider-row">
+        <label>速度</label>
+        <input type="range" id="sliderSpeed" min="0.1" max="5" step="0.1" value="1" oninput="onSpeedSlider(this.value)">
+        <span class="val" id="valSpeed">1.0x</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="param-section">
+    <h3>显示选项</h3>
+    <div class="toggle-row">
+      <span>理论齿廓（短幅外摆线）</span>
+      <label class="toggle-switch"><input type="checkbox" id="showTheoretical" checked><span class="toggle-slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <span>实际齿廓（等距曲线）</span>
+      <label class="toggle-switch"><input type="checkbox" id="showActual" checked><span class="toggle-slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <span>针齿分布</span>
+      <label class="toggle-switch"><input type="checkbox" id="showPins" checked><span class="toggle-slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <span>节圆 / 基圆</span>
+      <label class="toggle-switch"><input type="checkbox" id="showCircles" checked><span class="toggle-slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <span>齿顶圆 / 齿根圆</span>
+      <label class="toggle-switch"><input type="checkbox" id="showTipRoot" checked><span class="toggle-slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <span>偏心轴 / 轨迹</span>
+      <label class="toggle-switch"><input type="checkbox" id="showEccentric" checked><span class="toggle-slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <span>坐标轴</span>
+      <label class="toggle-switch"><input type="checkbox" id="showAxes" checked><span class="toggle-slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <span>啮合接触点</span>
+      <label class="toggle-switch"><input type="checkbox" id="showContact" checked><span class="toggle-slider"></span></label>
+    </div>
+  </div>
+
+  <div class="param-section">
+    <h3>快捷预设</h3>
+    <div class="preset-grid">
+      <button class="preset-btn" onclick="loadPreset(100,6,5,12,11)">小型 11齿</button>
+      <button class="preset-btn" onclick="loadPreset(120,7,5,18,17)">中型 17齿</button>
+      <button class="preset-btn" onclick="loadPreset(150,8,6,24,23)">大型 23齿</button>
+      <button class="preset-btn" onclick="loadPreset(180,10,8,30,29)">超大型 29齿</button>
+      <button class="preset-btn" onclick="loadPreset(90,4,3.5,8,7)">微型 7齿</button>
+      <button class="preset-btn" onclick="loadPreset(200,10,7,36,35)">重型 35齿</button>
+    </div>
+  </div>
+
+  <div class="param-section">
+    <h3>设计信息</h3>
+    <div class="info-card" id="infoCard"></div>
+  </div>
+</div>
+
+<!-- 中间画布 -->
+<div class="canvas-area">
+  <canvas id="gearCanvas" width="700" height="700"></canvas>
+  <div class="canvas-angle" id="canvasAngle">偏心角 φ = 0.0° &nbsp; 自转 α = 0.0°</div>
+  <div class="canvas-info">滚轮缩放 · 拖拽平移 · 双击复位</div>
+</div>
+
+<!-- 右侧方程面板 -->
+<div class="panel-right">
+  <div class="panel-header" style="background: linear-gradient(135deg, #8b5cf6, #ec4899);">📐 参数方程</div>
+
+  <div class="eq-section">
+    <h3>理论齿廓（短幅外摆线）</h3>
+    <div class="eq-block">
+      <div><span class="eq-label">x₀(θ)</span> <span class="eq-op">=</span> <span class="eq-var">R</span>·cos(<span class="eq-var">θ</span>) <span class="eq-op">−</span> <span class="eq-var">A</span>·cos(<span class="eq-var">Z₁</span>·<span class="eq-var">θ</span>)</div>
+      <div><span class="eq-label">y₀(θ)</span> <span class="eq-op">=</span> <span class="eq-var">R</span>·sin(<span class="eq-var">θ</span>) <span class="eq-op">−</span> <span class="eq-var">A</span>·sin(<span class="eq-var">Z₁</span>·<span class="eq-var">θ</span>)</div>
+      <div style="margin-top:6px; color:#64748b; font-size:11px;">θ ∈ [0, 2π]，Z₁ = Z₂ + 1</div>
+    </div>
+  </div>
+
+  <div class="eq-section">
+    <h3>实际齿廓（等距曲线）</h3>
+    <div class="eq-block">
+      <div style="color:#94a3b8; font-size:11px; margin-bottom:4px;">/* 法向量偏移 r */</div>
+      <div><span class="eq-label">dx₀/dθ</span> <span class="eq-op">=</span> <span class="eq-op">−</span><span class="eq-var">R</span>·sin(<span class="eq-var">θ</span>) <span class="eq-op">+</span> <span class="eq-var">A</span>·<span class="eq-var">Z₁</span>·sin(<span class="eq-var">Z₁</span>·<span class="eq-var">θ</span>)</div>
+      <div><span class="eq-label">dy₀/dθ</span> <span class="eq-op">=</span> <span class="eq-var">R</span>·cos(<span class="eq-var">θ</span>) <span class="eq-op">−</span> <span class="eq-var">A</span>·<span class="eq-var">Z₁</span>·cos(<span class="eq-var">Z₁</span>·<span class="eq-var">θ</span>)</div>
+      <div style="margin-top:4px;"><span class="eq-label">|T|</span> <span class="eq-op">=</span> √(dx₀² <span class="eq-op">+</span> dy₀²)</div>
+      <div style="margin-top:4px;"><span class="eq-label">x(θ)</span> <span class="eq-op">=</span> x₀ <span class="eq-op">−</span> <span class="eq-var">r</span>·dy₀ <span class="eq-op">/</span> |T|</div>
+      <div><span class="eq-label">y(θ)</span> <span class="eq-op">=</span> y₀ <span class="eq-op">+</span> <span class="eq-var">r</span>·dx₀ <span class="eq-op">/</span> |T|</div>
+    </div>
+  </div>
+
+  <div class="eq-section">
+    <h3>运动学方程</h3>
+    <div class="eq-block">
+      <div style="color:#94a3b8; font-size:11px; margin-bottom:4px;">/* 偏心角 φ 驱动 */</div>
+      <div><span class="eq-label">齿轮中心</span> <span class="eq-op">=</span> (<span class="eq-var">A</span>·cos<span class="eq-var">φ</span>, <span class="eq-var">A</span>·sin<span class="eq-var">φ</span>)</div>
+      <div><span class="eq-label">自转角</span> <span class="eq-op">α</span> <span class="eq-op">=</span> <span class="eq-op">−</span><span class="eq-var">φ</span> <span class="eq-op">/</span> <span class="eq-var">Z₂</span></div>
+      <div style="margin-top:4px; color:#64748b; font-size:11px;">/* 齿廓变换到世界坐标 */</div>
+      <div><span class="eq-label">x_w</span> <span class="eq-op">=</span> x₀·cos<span class="eq-var">α</span> <span class="eq-op">−</span> y₀·sin<span class="eq-var">α</span> <span class="eq-op">+</span> <span class="eq-var">A</span>·cos<span class="eq-var">φ</span></div>
+      <div><span class="eq-label">y_w</span> <span class="eq-op">=</span> x₀·sin<span class="eq-var">α</span> <span class="eq-op">+</span> y₀·cos<span class="eq-var">α</span> <span class="eq-op">+</span> <span class="eq-var">A</span>·sin<span class="eq-var">φ</span></div>
+    </div>
+  </div>
+
+  <div class="eq-section">
+    <h3>代入当前参数</h3>
+    <div class="eq-block" id="eqSubstituted"></div>
+  </div>
+
+  <div class="eq-section">
+    <h3>导出</h3>
+    <div class="export-btns">
+      <button class="export-btn" onclick="exportCSV()">📥 导出 CSV 数据点</button>
+      <button class="export-btn" onclick="exportPython()">🐍 导出 Python 代码</button>
+      <button class="export-btn" onclick="exportDXF()">📐 导出 DXF 文件</button>
+      <button class="export-btn secondary" onclick="copyEquation()">📋 复制参数方程</button>
+    </div>
+  </div>
+
+  <div class="eq-section">
+    <h3>关键尺寸</h3>
+    <div class="info-card" id="dimCard"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============ 全局状态 ============
+const canvas = document.getElementById('gearCanvas');
+const ctx = canvas.getContext('2d');
+let viewScale = 1, offsetX = 0, offsetY = 0;
+let isDragging = false, lastMX = 0, lastMY = 0;
+
+// 动画状态
+let animAngle = 0;        // 当前偏心角 φ（弧度）
+let animPlaying = false;
+let animSpeed = 1;
+let lastFrameTime = 0;
+let animFrameId = null;
+
+// ============ 参数读取 ============
+function getParams() {
+  const R = parseFloat(document.getElementById('paramR').value) || 100;
+  const r = parseFloat(document.getElementById('paramr').value) || 6;
+  const A = parseFloat(document.getElementById('paramA').value) || 5;
+  let Z1 = parseInt(document.getElementById('paramZ1').value) || 12;
+  let Z2 = parseInt(document.getElementById('paramZ2').value) || 11;
+  if (Z1 !== Z2 + 1) { Z1 = Z2 + 1; document.getElementById('paramZ1').value = Z1; }
+  return { R, r, A, Z1, Z2 };
+}
+
+// ============ 齿廓计算（齿轮自身坐标系） ============
+function computeProfile(R, A, Z1, Z2, r, numPoints) {
+  const theoretical = [];
+  const actual = [];
+  const dTheta = (2 * Math.PI) / numPoints;
+  for (let i = 0; i <= numPoints; i++) {
+    const theta = i * dTheta;
+    const cosT = Math.cos(theta), sinT = Math.sin(theta);
+    const cosZT = Math.cos(Z1 * theta), sinZT = Math.sin(Z1 * theta);
+    const x0 = R * cosT - A * cosZT;
+    const y0 = R * sinT - A * sinZT;
+    theoretical.push({ x: x0, y: y0, theta });
+    const dx = -R * sinT + A * Z1 * sinZT;
+    const dy = R * cosT - A * Z1 * cosZT;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len > 1e-10) {
+      actual.push({ x: x0 - r * dy / len, y: y0 + r * dx / len, theta });
+    }
+  }
+  return { theoretical, actual };
+}
+
+// ============ 坐标变换：齿轮坐标 → 世界坐标 ============
+function gearToWorld(px, py, phi, A, Z2) {
+  const alpha = -phi / Z2; // 自转角
+  const cosA = Math.cos(alpha), sinA = Math.sin(alpha);
+  const rx = px * cosA - py * sinA;
+  const ry = px * sinA + py * cosA;
+  return { x: rx + A * Math.cos(phi), y: ry + A * Math.sin(phi) };
+}
+
+// ============ 绘制 ============
+function draw(phi) {
+  if (phi === undefined) phi = animAngle;
+  const { R, r, A, Z1, Z2 } = getParams();
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2 + offsetX, cy = H / 2 + offsetY;
+
+  ctx.clearRect(0, 0, W, H);
+
+  const maxR = R + A + r + 20;
+  const autoScale = Math.min(W, H) / (2.6 * maxR);
+  const s = autoScale * viewScale;
+
+  const showTheoretical = document.getElementById('showTheoretical').checked;
+  const showActual = document.getElementById('showActual').checked;
+  const showPins = document.getElementById('showPins').checked;
+  const showCircles = document.getElementById('showCircles').checked;
+  const showTipRoot = document.getElementById('showTipRoot').checked;
+  const showEccentric = document.getElementById('showEccentric').checked;
+  const showAxes = document.getElementById('showAxes').checked;
+  const showContact = document.getElementById('showContact').checked;
+
+  // 自转角
+  const alpha = -phi / Z2;
+
+  // ---- 坐标轴 ----
+  if (showAxes) {
+    ctx.strokeStyle = '#334155'; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
+    ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(W, cy); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // ---- 针轮节圆（固定，半径 R）----
+  if (showCircles) {
+    ctx.strokeStyle = 'rgba(251,191,36,0.25)'; ctx.lineWidth = 1; ctx.setLineDash([8, 4]);
+    ctx.beginPath(); ctx.arc(cx, cy, R * s, 0, 2 * Math.PI); ctx.stroke();
+    // 摆线轮节圆（半径 R-A，随齿轮中心运动）
+    ctx.strokeStyle = 'rgba(56,189,248,0.25)';
+    const gcx = cx + A * Math.cos(phi) * s, gcy = cy - A * Math.sin(phi) * s;
+    ctx.beginPath(); ctx.arc(gcx, gcy, (R - A) * s, 0, 2 * Math.PI); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // ---- 齿顶圆 / 齿根圆（随齿轮中心运动）----
+  if (showTipRoot) {
+    const gcx = cx + A * Math.cos(phi) * s, gcy = cy - A * Math.sin(phi) * s;
+    ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(34,197,94,0.25)';
+    ctx.beginPath(); ctx.arc(gcx, gcy, (R + A - r) * s, 0, 2 * Math.PI); ctx.stroke();
+    ctx.strokeStyle = 'rgba(239,68,68,0.25)';
+    ctx.beginPath(); ctx.arc(gcx, gcy, (R - A + r) * s, 0, 2 * Math.PI); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // ---- 偏心轴轨迹圆 ----
+  if (showEccentric) {
+    ctx.strokeStyle = 'rgba(168,85,247,0.2)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.arc(cx, cy, A * s, 0, 2 * Math.PI); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // ---- 计算齿廓 ----
+  const numPts = Math.max(2000, Z2 * 200);
+  const { theoretical, actual } = computeProfile(R, A, Z1, Z2, r, numPts);
+
+  // ---- 绘制理论齿廓（变换到世界坐标）----
+  if (showTheoretical) {
+    ctx.strokeStyle = 'rgba(251,191,36,0.5)'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    theoretical.forEach((p, i) => {
+      const w = gearToWorld(p.x, p.y, phi, A, Z2);
+      const px = cx + w.x * s, py = cy - w.y * s;
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    });
+    ctx.closePath(); ctx.stroke();
+  }
+
+  // ---- 绘制实际齿廓（变换到世界坐标）----
+  if (showActual) {
+    // 填充
+    ctx.fillStyle = 'rgba(59,130,246,0.06)';
+    ctx.beginPath();
+    actual.forEach((p, i) => {
+      const w = gearToWorld(p.x, p.y, phi, A, Z2);
+      const px = cx + w.x * s, py = cy - w.y * s;
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    });
+    ctx.closePath(); ctx.fill();
+
+    // 轮廓线
+    ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    actual.forEach((p, i) => {
+      const w = gearToWorld(p.x, p.y, phi, A, Z2);
+      const px = cx + w.x * s, py = cy - w.y * s;
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    });
+    ctx.closePath(); ctx.stroke();
+
+    // 中心孔
+    const gcx = cx + A * Math.cos(phi) * s, gcy = cy - A * Math.sin(phi) * s;
+    const holeR = Math.max(6, (R - A - r) * 0.25) * s;
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath(); ctx.arc(gcx, gcy, holeR, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = 'rgba(59,130,246,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+
+  // ---- 针齿（固定在针轮节圆上）----
+  if (showPins) {
+    for (let i = 0; i < Z1; i++) {
+      const angle = (2 * Math.PI * i) / Z1;
+      const px = cx + R * Math.cos(angle) * s;
+      const py = cy - R * Math.sin(angle) * s;
+      const pr = r * s;
+      ctx.fillStyle = 'rgba(239,68,68,0.12)';
+      ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(px, py, pr, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath(); ctx.arc(px, py, 1.5, 0, 2 * Math.PI); ctx.fill();
+    }
+  }
+
+  // ---- 啮合接触点 ----
+  if (showContact) {
+    // 用已计算的 actual 齿廓搜索最近点
+    for (let i = 0; i < Z1; i++) {
+      const pinAngle = (2 * Math.PI * i) / Z1;
+      const pinX = R * Math.cos(pinAngle);
+      const pinY = R * Math.sin(pinAngle);
+
+      let minDist = Infinity, closestWx = 0, closestWy = 0;
+      for (const p of actual) {
+        const w = gearToWorld(p.x, p.y, phi, A, Z2);
+        const dx = w.x - pinX, dy = w.y - pinY;
+        const dist = dx * dx + dy * dy; // 用距离平方避免开方
+        if (dist < minDist) { minDist = dist; closestWx = w.x; closestWy = w.y; }
+      }
+      minDist = Math.sqrt(minDist);
+
+      // 只显示距离小于 r + 1 的接触点（真正啮合的针齿）
+      if (minDist < r + 1.5) {
+        const cpx = cx + closestWx * s, cpy = cy - closestWy * s;
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath(); ctx.arc(cpx, cpy, 4, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = 'rgba(34,197,94,0.3)';
+        ctx.beginPath(); ctx.arc(cpx, cpy, 8, 0, 2 * Math.PI); ctx.fill();
+      }
+    }
+  }
+
+  // ---- 偏心轴 ----
+  if (showEccentric) {
+    const gcx = cx + A * Math.cos(phi) * s, gcy = cy - A * Math.sin(phi) * s;
+    // 偏心轴杆
+    ctx.strokeStyle = 'rgba(168,85,247,0.8)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(gcx, gcy); ctx.stroke();
+    // 偏心轴端点
+    ctx.fillStyle = '#a855f7';
+    ctx.beginPath(); ctx.arc(gcx, gcy, 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = '#c084fc'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(gcx, gcy, 5, 0, 2 * Math.PI); ctx.stroke();
+    // 旋转方向箭头
+    const arrowR = A * s + 12;
+    const arrowAngle = phi + 0.3;
+    const ax = cx + arrowR * Math.cos(arrowAngle);
+    const ay = cy - arrowR * Math.sin(arrowAngle);
+    ctx.fillStyle = 'rgba(168,85,247,0.6)';
+    ctx.beginPath(); ctx.arc(ax, ay, 3, 0, 2 * Math.PI); ctx.fill();
+  }
+
+  // ---- 中心点（针轮中心）----
+  ctx.fillStyle = '#e2e8f0';
+  ctx.beginPath(); ctx.arc(cx, cy, 3, 0, 2 * Math.PI); ctx.fill();
+
+  // ---- 更新角度显示 ----
+  const phiDeg = (phi * 180 / Math.PI) % 360;
+  const alphaDeg = (alpha * 180 / Math.PI) % 360;
+  document.getElementById('canvasAngle').textContent =
+    `偏心角 φ = ${phiDeg.toFixed(1)}°   自转 α = ${alphaDeg.toFixed(1)}°   传动比 1:${Z2}`;
+
+  updateInfo(R, r, A, Z1, Z2);
+  updateEquations(R, r, A, Z1, Z2);
+}
+
+// ============ 动画循环 ============
+function animate(timestamp) {
+  if (!animPlaying) return;
+  if (lastFrameTime === 0) lastFrameTime = timestamp;
+  const dt = (timestamp - lastFrameTime) / 1000;
+  lastFrameTime = timestamp;
+
+  animAngle += animSpeed * dt * 0.8; // 0.8 rad/s 基础速度
+  if (animAngle > 2 * Math.PI) animAngle -= 2 * Math.PI;
+
+  // 同步角度滑块
+  const deg = (animAngle * 180 / Math.PI) % 360;
+  document.getElementById('sliderAngle').value = deg;
+  document.getElementById('valAngle').textContent = deg.toFixed(1) + '°';
+
+  draw(animAngle);
+  animFrameId = requestAnimationFrame(animate);
+}
+
+function togglePlay() {
+  animPlaying = !animPlaying;
+  const btn = document.getElementById('btnPlay');
+  if (animPlaying) {
+    btn.textContent = '⏸ 暂停';
+    btn.classList.add('active');
+    lastFrameTime = 0;
+    animFrameId = requestAnimationFrame(animate);
+  } else {
+    btn.textContent = '▶ 播放';
+    btn.classList.remove('active');
+    if (animFrameId) cancelAnimationFrame(animFrameId);
+  }
+}
+
+function resetAnim() {
+  animAngle = 0;
+  document.getElementById('sliderAngle').value = 0;
+  document.getElementById('valAngle').textContent = '0.0°';
+  draw(0);
+}
+
+function onAngleSlider(deg) {
+  animAngle = parseFloat(deg) * Math.PI / 180;
+  document.getElementById('valAngle').textContent = parseFloat(deg).toFixed(1) + '°';
+  draw(animAngle);
+}
+
+function onSpeedSlider(val) {
+  animSpeed = parseFloat(val);
+  document.getElementById('valSpeed').textContent = parseFloat(val).toFixed(1) + 'x';
+}
+
+// ============ 信息更新 ============
+function updateInfo(R, r, A, Z1, Z2) {
+  const tipR = R + A - r, rootR = R - A + r, pitchR = R - A;
+  document.getElementById('infoCard').innerHTML = `
+    <div class="info-row"><span class="info-label">传动比</span><span class="info-value">1 : ${Z2}</span></div>
+    <div class="info-row"><span class="info-label">齿顶圆半径</span><span class="info-value">${tipR.toFixed(2)} mm</span></div>
+    <div class="info-row"><span class="info-label">齿根圆半径</span><span class="info-value">${rootR.toFixed(2)} mm</span></div>
+    <div class="info-row"><span class="info-label">摆线轮节圆</span><span class="info-value">${pitchR.toFixed(2)} mm</span></div>
+    <div class="info-row"><span class="info-label">齿高</span><span class="info-value">${(tipR - rootR).toFixed(2)} mm</span></div>
+    <div class="info-row"><span class="info-label">短幅系数</span><span class="info-value">${(A * Z1 / R).toFixed(4)}</span></div>
+  `;
+  document.getElementById('dimCard').innerHTML = `
+    <div class="info-row"><span class="info-label">针轮中心圆</span><span class="info-value">⌀ ${2*R} mm</span></div>
+    <div class="info-row"><span class="info-label">针齿套直径</span><span class="info-value">⌀ ${2*r} mm</span></div>
+    <div class="info-row"><span class="info-label">偏心距</span><span class="info-value">${A} mm</span></div>
+    <div class="info-row"><span class="info-label">针齿数 Z₁</span><span class="info-value">${Z1}</span></div>
+    <div class="info-row"><span class="info-label">摆线齿数 Z₂</span><span class="info-value">${Z2}</span></div>
+    <div class="info-row"><span class="info-label">针齿间距</span><span class="info-value">${(2*R*Math.sin(Math.PI/Z1)).toFixed(2)} mm</span></div>
+  `;
+}
+
+function updateEquations(R, r, A, Z1, Z2) {
+  document.getElementById('eqSubstituted').innerHTML = `
+    <div style="color:#94a3b8; font-size:11px; margin-bottom:4px;">/* R=${R}, r=${r}, A=${A}, Z₁=${Z1}, Z₂=${Z2} */</div>
+    <div><span class="eq-label">x₀(θ)</span> <span class="eq-op">=</span> <span class="eq-num">${R}</span>·cos(<span class="eq-var">θ</span>) <span class="eq-op">−</span> <span class="eq-num">${A}</span>·cos(<span class="eq-num">${Z1}</span>·<span class="eq-var">θ</span>)</div>
+    <div><span class="eq-label">y₀(θ)</span> <span class="eq-op">=</span> <span class="eq-num">${R}</span>·sin(<span class="eq-var">θ</span>) <span class="eq-op">−</span> <span class="eq-num">${A}</span>·sin(<span class="eq-num">${Z1}</span>·<span class="eq-var">θ</span>)</div>
+    <div style="margin-top:4px;"><span class="eq-label">α</span> <span class="eq-op">=</span> <span class="eq-op">−</span><span class="eq-var">φ</span> <span class="eq-op">/</span> <span class="eq-num">${Z2}</span></div>
+    <div><span class="eq-label">x_w</span> <span class="eq-op">=</span> x₀·cos<span class="eq-var">α</span> <span class="eq-op">−</span> y₀·sin<span class="eq-var">α</span> <span class="eq-op">+</span> <span class="eq-num">${A}</span>·cos<span class="eq-var">φ</span></div>
+    <div><span class="eq-label">y_w</span> <span class="eq-op">=</span> x₀·sin<span class="eq-var">α</span> <span class="eq-op">+</span> y₀·cos<span class="eq-var">α</span> <span class="eq-op">+</span> <span class="eq-num">${A}</span>·sin<span class="eq-var">φ</span></div>
+  `;
+}
+
+// ============ 预设 ============
+function loadPreset(R, r, A, Z1, Z2) {
+  document.getElementById('paramR').value = R;
+  document.getElementById('paramr').value = r;
+  document.getElementById('paramA').value = A;
+  document.getElementById('paramZ1').value = Z1;
+  document.getElementById('paramZ2').value = Z2;
+  draw(animAngle);
+}
+
+// ============ 导出 CSV ============
+function exportCSV() {
+  const { R, r, A, Z1, Z2 } = getParams();
+  const numPts = Z2 * 360;
+  const { theoretical, actual } = computeProfile(R, A, Z1, Z2, r, numPts);
+  let csv = 'theta,x_theoretical,y_theoretical,x_actual,y_actual\n';
+  csv += `# R=${R}, r=${r}, A=${A}, Z1=${Z1}, Z2=${Z2}\n`;
+  for (let i = 0; i < actual.length; i++) {
+    const t = theoretical[i], a = actual[i];
+    csv += `${t.theta.toFixed(8)},${t.x.toFixed(6)},${t.y.toFixed(6)},${a.x.toFixed(6)},${a.y.toFixed(6)}\n`;
+  }
+  downloadFile(csv, `cycloid_R${R}_Z${Z2}.csv`, 'text/csv');
+  showToast('CSV 文件已导出');
+}
+
+// ============ 导出 Python ============
+function exportPython() {
+  const { R, r, A, Z1, Z2 } = getParams();
+  const code = `#!/usr/bin/env python3
+"""摆线齿轮参数方程生成器
+参数: R=${R}, r=${r}, A=${A}, Z1=${Z1}, Z2=${Z2}
+"""
+import math
+import csv
+
+R = ${R}    # 针轮半径
+r = ${r}    # 针齿套半径
+A = ${A}    # 偏心距
+Z1 = ${Z1}  # 针齿数
+Z2 = ${Z2}  # 摆线轮齿数
+
+def cycloid_theoretical(theta):
+    """理论齿廓（短幅外摆线）- 齿轮自身坐标系"""
+    x = R * math.cos(theta) - A * math.cos(Z1 * theta)
+    y = R * math.sin(theta) - A * math.sin(Z1 * theta)
+    return x, y
+
+def cycloid_actual(theta):
+    """实际齿廓（等距曲线）- 齿轮自身坐标系"""
+    x0, y0 = cycloid_theoretical(theta)
+    dx = -R * math.sin(theta) + A * Z1 * math.sin(Z1 * theta)
+    dy =  R * math.cos(theta) - A * Z1 * math.cos(Z1 * theta)
+    length = math.sqrt(dx**2 + dy**2)
+    x = x0 - r * dy / length
+    y = y0 + r * dx / length
+    return x, y
+
+def gear_to_world(x0, y0, phi):
+    """齿轮坐标变换到世界坐标
+    phi: 偏心角
+    """
+    alpha = -phi / Z2  # 自转角
+    cos_a, sin_a = math.cos(alpha), math.sin(alpha)
+    rx = x0 * cos_a - y0 * sin_a
+    ry = x0 * sin_a + y0 * cos_a
+    wx = rx + A * math.cos(phi)
+    wy = ry + A * math.sin(phi)
+    return wx, wy
+
+def generate_points(n=3600, phi=0.0):
+    """生成 n 个数据点（含世界坐标变换）"""
+    points = []
+    for i in range(n + 1):
+        theta = 2 * math.pi * i / n
+        xt, yt = cycloid_theoretical(theta)
+        xa, ya = cycloid_actual(theta)
+        # 世界坐标
+        xaw, yaw = gear_to_world(xa, ya, phi)
+        points.append((theta, xt, yt, xa, ya, xaw, yaw))
+    return points
+
+if __name__ == '__main__':
+    points = generate_points(3600, phi=0.0)
+    with open('cycloid_data.csv', 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['theta', 'x_theo', 'y_theo', 'x_actual', 'y_actual', 'x_world', 'y_world'])
+        for p in points:
+            writer.writerow([f'{v:.8f}' for v in p])
+    print(f'已生成 {len(points)} 个数据点')
+
+    print(f'\\n=== 摆线齿轮参数 ===')
+    print(f'齿顶圆半径: {R + A - r:.2f} mm')
+    print(f'齿根圆半径: {R - A + r:.2f} mm')
+    print(f'传动比: 1:{Z2}')
+    print(f'自转角公式: alpha = -phi / {Z2}')
+`;
+  downloadFile(code, `cycloid_R${R}_Z${Z2}.py`, 'text/plain');
+  showToast('Python 文件已导出');
+}
+
+// ============ 导出 DXF ============
+function exportDXF() {
+  const { R, r, A, Z1, Z2 } = getParams();
+  const numPts = Z2 * 360;
+  const { actual } = computeProfile(R, A, Z1, Z2, r, numPts);
+  let dxf = '0\nSECTION\n2\nENTITIES\n';
+  dxf += '0\nPOLYLINE\n8\nCycloidProfile\n66\n1\n70\n1\n';
+  for (const p of actual) {
+    dxf += `0\nVERTEX\n8\nCycloidProfile\n10\n${p.x.toFixed(6)}\n20\n${p.y.toFixed(6)}\n30\n0.0\n`;
+  }
+  dxf += '0\nSEQEND\n8\nCycloidProfile\n';
+  for (let i = 0; i < Z1; i++) {
+    const angle = (2 * Math.PI * i) / Z1;
+    dxf += `0\nCIRCLE\n8\nPins\n10\n${(R*Math.cos(angle)).toFixed(6)}\n20\n${(R*Math.sin(angle)).toFixed(6)}\n30\n0.0\n40\n${r.toFixed(6)}\n`;
+  }
+  dxf += `0\nCIRCLE\n8\nPitchCircle\n10\n0.0\n20\n0.0\n30\n0.0\n40\n${R.toFixed(6)}\n`;
+  dxf += `0\nCIRCLE\n8\nPitchCircle\n10\n0.0\n20\n0.0\n30\n0.0\n40\n${(R-A).toFixed(6)}\n`;
+  dxf += '0\nENDSEC\n0\nEOF\n';
+  downloadFile(dxf, `cycloid_R${R}_Z${Z2}.dxf`, 'application/dxf');
+  showToast('DXF 文件已导出');
+}
+
+// ============ 复制方程 ============
+function copyEquation() {
+  const { R, r, A, Z1, Z2 } = getParams();
+  const text = `摆线齿轮参数方程
+==================
+参数: R=${R}mm, r=${r}mm, A=${A}mm, Z₁=${Z1}, Z₂=${Z2}
+
+【理论齿廓 - 短幅外摆线（齿轮自身坐标系）】
+x₀(θ) = ${R}·cos(θ) - ${A}·cos(${Z1}·θ)
+y₀(θ) = ${R}·sin(θ) - ${A}·sin(${Z1}·θ)
+
+【实际齿廓 - 等距曲线】
+dx₀/dθ = -${R}·sin(θ) + ${A}·${Z1}·sin(${Z1}·θ)
+dy₀/dθ = ${R}·cos(θ) - ${A}·${Z1}·cos(${Z1}·θ)
+|T| = √(dx₀² + dy₀²)
+x(θ) = x₀ - ${r}·dy₀/|T|
+y(θ) = y₀ + ${r}·dx₀/|T|
+
+【运动学变换】
+偏心角 φ → 齿轮中心: (${A}·cosφ, ${A}·sinφ)
+自转角: α = -φ/${Z2}
+世界坐标:
+  x_w = x₀·cosα - y₀·sinα + ${A}·cosφ
+  y_w = x₀·sinα + y₀·cosα + ${A}·sinφ
+
+θ ∈ [0, 2π]`;
+  navigator.clipboard.writeText(text).then(() => showToast('方程已复制到剪贴板'));
+}
+
+// ============ 工具函数 ============
+function downloadFile(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ============ 交互 ============
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  viewScale *= e.deltaY > 0 ? 0.9 : 1.1;
+  viewScale = Math.max(0.1, Math.min(10, viewScale));
+  draw(animAngle);
+});
+canvas.addEventListener('mousedown', e => { isDragging = true; lastMX = e.clientX; lastMY = e.clientY; });
+canvas.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  offsetX += e.clientX - lastMX; offsetY += e.clientY - lastMY;
+  lastMX = e.clientX; lastMY = e.clientY;
+  draw(animAngle);
+});
+canvas.addEventListener('mouseup', () => isDragging = false);
+canvas.addEventListener('mouseleave', () => isDragging = false);
+canvas.addEventListener('dblclick', () => { viewScale = 1; offsetX = 0; offsetY = 0; draw(animAngle); });
+
+document.querySelectorAll('.panel-left input[type="number"]').forEach(el => {
+  el.addEventListener('input', () => draw(animAngle));
+});
+document.querySelectorAll('.toggle-switch input').forEach(el => {
+  el.addEventListener('change', () => draw(animAngle));
+});
+document.getElementById('paramZ2').addEventListener('input', () => {
+  const Z2 = parseInt(document.getElementById('paramZ2').value) || 11;
+  document.getElementById('paramZ1').value = Z2 + 1;
+  draw(animAngle);
+});
+
+// ============ 初始化 ============
+draw(0);
+</script>
+</body>
+</html>
